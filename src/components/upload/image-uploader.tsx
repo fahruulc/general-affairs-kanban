@@ -83,48 +83,77 @@ export function ImageUploader({
         )
       );
 
-      // 2. Request presigned upload URL
-      const presignRes = await fetch("/api/uploads/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: compressed.name,
-          contentType: compressed.type || "image/jpeg",
-          sizeBytes: compressed.size,
-        }),
-      });
+      let finalObjectKey: string | null = null;
 
-      if (!presignRes.ok) {
-        const errorData = await presignRes.json();
-        throw new Error(errorData.error || "Gagal mendapatkan izin unggah.");
+      // 2. Try direct S3 upload via presigned URL
+      try {
+        const presignRes = await fetch("/api/uploads/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: compressed.name,
+            contentType: compressed.type || "image/jpeg",
+            sizeBytes: compressed.size,
+          }),
+        });
+
+        if (presignRes.ok) {
+          const { uploadUrl, objectKey } = await presignRes.json();
+
+          setItems((prev) =>
+            prev.map((it) =>
+              it.id === item.id ? { ...it, progress: 40 } : it
+            )
+          );
+
+          const uploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": compressed.type || "image/jpeg",
+            },
+            body: compressed,
+          });
+
+          if (uploadRes.ok) {
+            finalObjectKey = objectKey;
+          } else {
+            console.warn("[Upload] Direct S3 PUT failed, falling back to server route.");
+          }
+        }
+      } catch (directErr) {
+        console.warn("[Upload] Direct S3 PUT threw error (likely CORS):", directErr);
       }
 
-      const { uploadUrl, objectKey } = await presignRes.json();
+      // 3. Fallback to server-side upload route if direct S3 PUT was blocked by CORS
+      if (!finalObjectKey) {
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id ? { ...it, progress: 60 } : it
+          )
+        );
 
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === item.id ? { ...it, progress: 40 } : it
-        )
-      );
+        const formData = new FormData();
+        formData.append("file", compressed);
 
-      // 3. Direct upload to S3 using HTTP PUT
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": compressed.type || "image/jpeg",
-        },
-        body: compressed,
-      });
+        const serverRes = await fetch("/api/uploads", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!uploadRes.ok) {
-        throw new Error("Gagal mengunggah foto ke penyimpanan.");
+        if (!serverRes.ok) {
+          const errorData = await serverRes.json();
+          throw new Error(errorData.error || "Gagal mengunggah foto ke penyimpanan.");
+        }
+
+        const data = await serverRes.json();
+        finalObjectKey = data.objectKey;
       }
 
       // Mark done
       setItems((prev) =>
         prev.map((it) =>
           it.id === item.id
-            ? { ...it, status: "done" as const, progress: 100, objectKey }
+            ? { ...it, status: "done" as const, progress: 100, objectKey: finalObjectKey || undefined }
             : it
         )
       );

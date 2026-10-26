@@ -19,9 +19,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         try {
+          console.log("Mencoba login dengan email:", (credentials as any)?.email);
+
           const parsed = loginSchema.safeParse(credentials);
           if (!parsed.success) {
-            console.error("[auth] Validation error:", parsed.error.issues);
+            console.log("Validasi input login gagal:", parsed.error.issues);
             return null;
           }
 
@@ -31,20 +33,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
 
           if (!user) {
-            console.error(`[auth] User not found: ${email}`);
+            console.log("User tidak ditemukan di DB");
             return null;
           }
 
           if (!user.isActive) {
-            console.error(`[auth] User is inactive: ${email}`);
+            console.log("Akun user dinonaktifkan:", email);
             return null;
           }
 
-          const isValid = await bcrypt.compare(password, user.passwordHash);
-          if (!isValid) {
-            console.error(`[auth] Password mismatch for: ${email}`);
+          const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+          if (!isValidPassword) {
+            console.log("Password salah");
             return null;
           }
+
+          console.log("Login berhasil untuk user:", user.email, "role:", user.role);
 
           return {
             id: user.id,
@@ -54,7 +58,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             mustChangePassword: user.mustChangePassword,
           };
         } catch (error) {
-          console.error("[auth] Error during authorize callback:", error);
+          console.error("Error di dalam authorize function:", error);
           return null;
         }
       },

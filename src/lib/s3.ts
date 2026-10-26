@@ -8,28 +8,41 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import { APP_CONFIG } from "./constants";
 
-const endpoint = process.env.S3_ENDPOINT || "http://127.0.0.1:9000";
-const region = process.env.S3_REGION || "us-east-1";
-const bucket = process.env.S3_BUCKET || "lapor-ga";
-const accessKeyId = process.env.S3_ACCESS_KEY_ID || "localaccess";
-const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY || "localsecret123";
-const forcePathStyle = process.env.S3_FORCE_PATH_STYLE !== "false";
+let _cachedClient: S3Client | null = null;
 
-export const s3Client = new S3Client({
-  endpoint,
-  region,
-  credentials: {
-    accessKeyId,
-    secretAccessKey,
+export function getS3Client(): S3Client {
+  if (!_cachedClient) {
+    const endpoint = process.env.S3_ENDPOINT || "http://127.0.0.1:9000";
+    const region = process.env.S3_REGION || "us-east-1";
+    const accessKeyId = process.env.S3_ACCESS_KEY_ID || "localaccess";
+    const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY || "localsecret123";
+    const forcePathStyle = process.env.S3_FORCE_PATH_STYLE !== "false";
+
+    _cachedClient = new S3Client({
+      endpoint,
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+      forcePathStyle,
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
+    } as any);
+  }
+  return _cachedClient;
+}
+
+export const s3Client = new Proxy({} as S3Client, {
+  get(_target, prop) {
+    const client = getS3Client() as any;
+    const value = client[prop];
+    return typeof value === "function" ? value.bind(client) : value;
   },
-  forcePathStyle,
-  // Required for Backblaze B2 S3-compatibility
-  requestChecksumCalculation: "WHEN_REQUIRED",
-  responseChecksumValidation: "WHEN_REQUIRED",
-} as any);
+});
 
 export function getBucketName(): string {
-  return bucket;
+  return process.env.S3_BUCKET || "general-affairs";
 }
 
 /**
@@ -62,7 +75,7 @@ export async function createPresignedUploadUrl(
   expiresInSeconds: number = APP_CONFIG.uploadUrlTtlSeconds
 ): Promise<{ uploadUrl: string; objectKey: string }> {
   const command = new PutObjectCommand({
-    Bucket: bucket,
+    Bucket: getBucketName(),
     Key: objectKey,
     ContentType: contentType,
   });
@@ -82,7 +95,7 @@ export async function createPresignedDownloadUrl(
   expiresInSeconds: number = APP_CONFIG.downloadUrlTtlSeconds
 ): Promise<string> {
   const command = new GetObjectCommand({
-    Bucket: bucket,
+    Bucket: getBucketName(),
     Key: objectKey,
   });
 
@@ -99,7 +112,7 @@ export async function verifyObjectExists(
 ): Promise<{ sizeBytes: number; contentType?: string } | null> {
   try {
     const command = new HeadObjectCommand({
-      Bucket: bucket,
+      Bucket: getBucketName(),
       Key: objectKey,
     });
     const result = await s3Client.send(command);
