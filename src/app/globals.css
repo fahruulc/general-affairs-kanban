@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --surface: #FAFAF9;
+  --border: #E7E5E4;
+  --text: #1C1917;
+  --text-muted: #57534E;
+  --primary: #1E293B;
+  --primary-hover: #0F172A;
+  --accent: #9A7B4F;
+  --focus-ring: #1E293B;
+
+  /* Status Colors */
+  --status-new-bg: #F1F5F9;
+  --status-new-text: #334155;
+  --status-inprogress-bg: #FEF3C7;
+  --status-inprogress-text: #92400E;
+  --status-done-bg: #DCFCE7;
+  --status-done-text: #166534;
+  --status-rejected-bg: #FEE2E2;
+  --status-rejected-text: #991B1B;
+
+  /* Priority Colors */
+  --priority-low-bg: #F1F5F9;
+  --priority-low-text: #334155;
+  --priority-med-bg: #E0E7FF;
+  --priority-med-text: #3730A3;
+  --priority-high-bg: #FFEDD5;
+  --priority-high-text: #9A3412;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-poppins), sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom focus ring */
+*:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
